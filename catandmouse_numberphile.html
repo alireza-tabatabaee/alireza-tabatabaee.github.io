@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game of Cat and Mouse Numberphile - By Alireza Tabatabaee</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: start;
+            align-items: start;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #canvasContainer {
+            margin-right: 20px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border: 1px solid black;
+        }
+        #controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        label {
+            margin-bottom: 5px;
+            font-family: 'Tahoma';
+        }
+        input[type="number"] {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <table>
+    <tr>
+    <td width="700">
+    <div id="canvasContainer">
+        <canvas id="mainCanvas" width="700" height="700"></canvas> <!-- For pond and trajectory -->
+        <canvas id="topCanvas" width="700" height="700"></canvas>  <!-- For cat and mouse -->
+    </div>
+    </td>
+    <td width="100">
+    </td>
+    <td width="300">
+    <div id="controls">
+        <label for="optionSelector" font="Tahoma">Choose tactic:</label>
+        <select id="optionSelector" onchange="handleOptionChange()">
+            <option value="1">Away Tactic</option>
+            <option value="2">Opposite point Tactic</option>
+            <option value="3">Dash Tactic</option>
+            <option value="4">Circle Tactic</option>
+            <option value="5">Successful Escape Tactic</option>
+        </select>
+
+        <label for="numberInput">Cat to Mouse Speed (0.5 to 5.0):</label>
+        <input type="number" id="numberInput" min="0.5" max="5.0" step="0.1" value="4">
+        
+        <div>
+            <label for="numberDisplay">Current speed:</label>
+            <span id="numberDisplay">4</span>
+        </div>
+
+        <button id="resetButton">Reset</button>
+        <button id="cleartraceButton">Clear trace</button>
+
+        
+    </div>
+    <br><hr>
+    <p style="font-family:tahoma;">This is a single file HTML5 + Javascript implementation of The Cat and Mouse game as shown in the Numberphile video below.</p>
+    <p style="font-family:tahoma;">Feel free to read the source code by pressing Ctrl+U on your browser.</p>
+    <iframe width="420" height="240" src="https://www.youtube.com/embed/vF_-ob9vseM"></iframe>
+    </td>
+    </tr>
+    </table>
+
+    <script>
+        const maincanvas = document.getElementById('mainCanvas');
+        const mctx = maincanvas.getContext('2d');
+        maincanvas.style.backgroundColor = "#FFF";
+
+        const topcanvas = document.getElementById('topCanvas');
+        const tctx = topcanvas.getContext('2d');
+
+        // drawing the pond
+        const pondcenterX = maincanvas.width / 2;
+        const pondcenterY = maincanvas.height / 2;
+        const pondradius = 280;
+        mctx.beginPath();
+        mctx.arc(pondcenterX, pondcenterY, pondradius, 0, 2 * Math.PI);
+        mctx.stroke();     
+
+        // params and variables
+        const catRadius = 5;
+        const MouseRadius = 4;
+        const TrailRadius = 1;
+        const minAngle = 0.03;
+        var tactic = 1;
+        var simuRun = true;
+        var mouseTrajectory = true;     // Whether to draw the mouse's former path or not
+        var speedRatio = 4;           // Cat speed / Mouse speed
+
+        var catAngle = -Math.PI-0.0001;
+        var catAngularSpeed = 0.06;
+        var mouseSpeed = catAngularSpeed*pondradius/(speedRatio);     // probably should move somewhere else if speed ratio dynamically changable
+        var mousex = pondcenterX;// + pondradius*0.2;
+        var mousey = pondcenterY + pondradius*0.5;
+
+        function drawCat()
+        {
+            const catX = pondcenterX + pondradius * Math.cos(catAngle);
+            const catY = pondcenterY + pondradius * Math.sin(catAngle);
+            tctx.beginPath();
+            tctx.arc(catX, catY, catRadius, 0, 2 * Math.PI);
+            tctx.fillStyle = 'blue';
+            tctx.fill();
+        }
+
+        function drawMouse()
+        {
+            tctx.beginPath();
+            tctx.arc(mousex, mousey, MouseRadius, 0, 2 * Math.PI);
+            tctx.fillStyle = 'brown';
+            tctx.fill();
+            if(mouseTrajectory)
+            {
+                mctx.beginPath();
+                mctx.arc(mousex, mousey, TrailRadius, 0, 2 * Math.PI);
+                mctx.fillStyle = '#101084';
+                mctx.fill();
+            }
+        }
+
+        function updateCatLoc()
+        {
+            var mouseAngle = Math.atan2(mousey-pondcenterY, mousex-pondcenterX);
+            
+            diffAngle = (catAngle - mouseAngle) % (2*Math.PI);  // calculate the angular difference between cat and mouse and turn it into (-pi,+pi)
+            if(diffAngle < -Math.PI)
+                diffAngle += (2*Math.PI);
+            else if(diffAngle > Math.PI)
+                diffAngle -= (2*Math.PI);
+
+            //console.log(mouseAngle, catAngle, diffAngle);
+            if(Math.abs(diffAngle) >= minAngle)
+            {
+                if(diffAngle > 0)
+                    catAngle -= catAngularSpeed;
+                else
+                    catAngle += catAngularSpeed;
+            }
+        }
+
+        function tacticAway()
+        {
+            const catX = pondcenterX + pondradius * Math.cos(catAngle);
+            const catY = pondcenterY + pondradius * Math.sin(catAngle);
+
+            var absang = Math.atan2(catY-mousey, catX-mousex);  //absolute angle of cat to mouse (pond not included)
+            mousex -= mouseSpeed * Math.cos(absang);
+            mousey -= mouseSpeed * Math.sin(absang);
+        }
+        function tacticOpp()
+        {
+            const catX = pondcenterX + pondradius * Math.cos(catAngle);
+            const catY = pondcenterY + pondradius * Math.sin(catAngle);
+            const targetX = 2*pondcenterX - catX;
+            const targetY = 2*pondcenterY - catY;
+
+            // show the opposite point of the cat
+            tctx.beginPath();
+            tctx.arc(targetX, targetY, catRadius, 0, 2 * Math.PI);
+            tctx.fillStyle = '#d0d0ff';
+            tctx.fill();
+
+            var oppang = Math.atan2(targetY-mousey, targetX-mousex);  //angle at the opposite point to the cat
+            mousex += mouseSpeed * Math.cos(oppang);
+            mousey += mouseSpeed * Math.sin(oppang);
+        }
+        function tacticDash()
+        {
+            var dashang = Math.atan2(pondcenterY-mousey, pondcenterX-mousex); 
+            mousex -= mouseSpeed * Math.cos(dashang);
+            mousey -= mouseSpeed * Math.sin(dashang);
+        }
+        function negDash()
+        {
+            var dashang = Math.atan2(pondcenterY-mousey, pondcenterX-mousex); 
+            mousex += mouseSpeed * Math.cos(dashang);
+            mousey += mouseSpeed * Math.sin(dashang);
+        }
+        //var logctr = 0;
+        function tacticCircle()
+        {
+            mouseRadius = Math.sqrt(Math.pow(mousex-pondcenterX,2)+Math.pow(mousey-pondcenterY,2));
+            var mouseAngle = Math.atan2(pondcenterY-mousey, pondcenterX-mousex)+Math.PI; 
+            //var mouseAngularSpeed = (catAngularSpeed*(pondradius/mouseRadius))/speedRatio;//mouseSpeed/mouseRadius;
+            var mouseAngularSpeed = mouseSpeed/mouseRadius;
+            mouseAngle += mouseAngularSpeed;
+            mousex = pondcenterX + mouseRadius * Math.cos(mouseAngle);
+            mousey = pondcenterY + mouseRadius * Math.sin(mouseAngle);
+
+            diffAngle = (catAngle - mouseAngle) % (2*Math.PI);  // calculate the angular difference between cat and mouse and turn it into (-pi,+pi)
+            if(diffAngle < -Math.PI)
+                diffAngle += (2*Math.PI);
+            else if(diffAngle > Math.PI)
+                diffAngle -= (2*Math.PI);     
+            
+            //console.log(diffAngle*180/Math.PI);
+        }
+
+        var escapephase = -1;
+        function tacticEscape()
+        {
+            var r1 = (1 - (Math.PI/speedRatio))*pondradius;
+            if(r1<0) r1 = 0;
+            var r2 = (1/speedRatio)*pondradius;
+            if(escapephase == -1)
+            {
+                // draw sweet spots
+                mctx.beginPath();
+                mctx.arc(pondcenterX, pondcenterY, r2, 0, 2 * Math.PI);
+                mctx.fillStyle = "#ffa0a0";
+                mctx.fill();
+                if(r1<r2)
+                {
+                    mctx.beginPath();
+                    mctx.arc(pondcenterX, pondcenterY, r1, 0, 2 * Math.PI);
+                    mctx.fillStyle = "pink";
+                    mctx.fill();
+                }   
+                escapephase = 0;
+            }           
+
+            if(escapephase==0)
+            {   // go to sweet spot
+                var mouser = Math.sqrt(Math.pow(mousex-pondcenterX,2)+Math.pow(mousey-pondcenterY,2));
+                if(mouser <= r1)
+                    tacticDash();
+                else
+                    negDash();
+                mouser = Math.sqrt(Math.pow(mousex-pondcenterX,2)+Math.pow(mousey-pondcenterY,2));
+                //console.log("rc", mouser);
+                if(mouser<(0.2*r1+0.8*r2) && mouser>=r1)
+                {
+                    //console.log("FR", mouser);
+                    escapephase = 1;
+                }
+            }
+            else if(escapephase==1)
+            {
+                tacticCircle();
+                var mouseAngle = Math.atan2(pondcenterY-mousey, pondcenterX-mousex)+Math.PI; 
+                diffAngle = (catAngle - mouseAngle) % (2*Math.PI);  // calculate the angular difference between cat and mouse and turn it into (-pi,+pi)
+                if(diffAngle < -Math.PI)
+                    diffAngle += (2*Math.PI);
+                else if(diffAngle > Math.PI)
+                    diffAngle -= (2*Math.PI);   
+                
+                if(Math.abs(diffAngle) >= Math.PI-0.005)
+                {
+                    console.log("circdone", diffAngle);
+                    escapephase = 2;
+                }
+            }
+            else if(escapephase==2)
+            {
+                tacticDash();
+            }
+        }
+
+
+        function updateMouseLoc()
+        {
+            // Strategy 1 : Away Tactic
+            if(tactic==1)
+                tacticAway();
+            // Strategy 2: Opposite point tactic
+            else if(tactic==2)
+                tacticOpp();
+            // Strategy 3: Dash tactic
+            else if(tactic==3)
+                tacticDash();
+            else if(tactic==4)
+                tacticCircle();
+            else if(tactic==5)
+                tacticEscape(); 
+        }
+
+        function checkForMouseStatus()
+        {
+            const catX = pondcenterX + pondradius * Math.cos(catAngle);
+            const catY = pondcenterY + pondradius * Math.sin(catAngle);
+            
+            var mouseAngle = Math.atan2(mousey-pondcenterY, mousex-pondcenterX);
+            var diffAngle = (catAngle - mouseAngle) % (2*Math.PI);  // calculate the angular difference between cat and mouse and turn it into (-pi,+pi)
+            if(diffAngle < -Math.PI)
+                diffAngle += (2*Math.PI);
+            else if(diffAngle > Math.PI)
+                diffAngle -= (2*Math.PI);
+            tctx.font = "20px Arial";  // Font size and font family
+            tctx.fillStyle = "black";
+            var showstr = "Cat/Mouse Angle = ".concat(((diffAngle*180)/Math.PI).toFixed(2).toString().concat("°"));
+            tctx.fillText(showstr, 450, 30);
+
+            if(Math.pow(mousex-catX,2)+Math.pow(mousey-catY,2) <= 16)
+            {
+                alert("mouse caught!");
+                simuRun = false;
+            }
+
+            else if(Math.pow(mousex-pondcenterX,2)+Math.pow(mousey-pondcenterY,2) >= Math.pow(pondradius-1,2))
+            {
+                alert("Mouse successfully escaped!");
+                simuRun = false;
+            }
+            
+        }
+
+        const numberInput = document.getElementById('numberInput');
+        const numberDisplay = document.getElementById('numberDisplay');
+        const resetButton = document.getElementById('resetButton');
+        const cleartraceButton = document.getElementById('cleartraceButton');
+        //optionSelector
+        
+        function handleOptionChange()
+        {
+            const selectedOption = document.getElementById("optionSelector").value;
+            
+            escapephase = -1;
+            if(tactic==5 && selectedOption!=5)  // If Successful Escape to something else, remove the sweet spot
+            {
+                mctx.beginPath();
+                mctx.arc(pondcenterX, pondcenterY, 278, 0, 2 * Math.PI);
+                mctx.fillStyle = "#fff";
+                mctx.fill();
+            }
+            tactic = selectedOption;
+        }
+
+        // Speed Changer
+        numberInput.addEventListener('input', () => {
+            if(numberInput.value<0.5)
+                numberInput.value = 0.5;
+            else if(numberInput.value>5)
+                numberInput.value = 5;
+            numberDisplay.textContent = numberInput.value;
+            if(numberInput.value > 4.1)
+                numberDisplay.style.color = 'red';
+            else
+                numberDisplay.style.color = 'black';
+            
+            speedRatio = numberInput.value;
+            mouseSpeed = catAngularSpeed*pondradius/(speedRatio); 
+            if(tactic==5)
+            {   // If tactic is successful escape, redraw the sweet spot
+                var r1 = (1 - (Math.PI/speedRatio))*pondradius;
+                if(r1<0) r1 = 0;
+                var r2 = (1/speedRatio)*pondradius;
+                // draw sweet spots
+                mctx.beginPath();
+                mctx.arc(pondcenterX, pondcenterY, r2, 0, 2 * Math.PI);
+                mctx.fillStyle = "#ffa0a0";
+                mctx.fill();
+                if(r1<r2)
+                {
+                    mctx.beginPath();
+                    mctx.arc(pondcenterX, pondcenterY, r1, 0, 2 * Math.PI);
+                    mctx.fillStyle = "pink";
+                    mctx.fill();
+                } 
+            }
+        });
+
+        // Reset functionality
+        resetButton.addEventListener('click', () => {
+            numberInput.value = 4;
+            numberDisplay.textContent = 4;
+            document.getElementById('optionSelector').selectedIndex = 0;
+
+            speedRatio = numberInput.value;
+            mouseSpeed = catAngularSpeed*pondradius/(speedRatio); 
+
+            tactic = 1;
+            mouseTrajectory = true;     // Whether to draw the mouse's former path or not
+            speedRatio = 4;           // Cat speed / Mouse speed
+
+            catAngle = -Math.PI-0.0001;
+            catAngularSpeed = 0.06;
+            mouseSpeed = catAngularSpeed*pondradius/(speedRatio);     // probably should move somewhere else if speed ratio dynamically changable
+            mousex = pondcenterX;
+            mousey = pondcenterY + pondradius*0.5;  
+            
+            mctx.clearRect(0, 0, topcanvas.width, topcanvas.height);
+            // drawing the pond
+            mctx.beginPath();
+            mctx.arc(pondcenterX, pondcenterY, pondradius, 0, 2 * Math.PI);
+            mctx.stroke(); 
+            
+            if(!simuRun)
+            {
+                simuRun = true;
+                update();
+            }
+            
+        });
+
+        // Clear trace functionality
+        cleartraceButton.addEventListener('click', () => {
+            mctx.clearRect(0, 0, topcanvas.width, topcanvas.height);
+            // drawing the pond
+            const pondcenterX = maincanvas.width / 2;
+            const pondcenterY = maincanvas.height / 2;
+            const pondradius = 280;
+            mctx.beginPath();
+            mctx.arc(pondcenterX, pondcenterY, pondradius, 0, 2 * Math.PI);
+            mctx.stroke(); 
+            if(tactic==5)
+            {   // If tactic is successful escape, redraw the sweet spot
+                var r1 = (1 - (Math.PI/speedRatio))*pondradius;
+                if(r1<0) r1 = 0;
+                var r2 = (1/speedRatio)*pondradius;
+                // draw sweet spots
+                mctx.beginPath();
+                mctx.arc(pondcenterX, pondcenterY, r2, 0, 2 * Math.PI);
+                mctx.fillStyle = "#ffa0a0";
+                mctx.fill();
+                if(r1<r2)
+                {
+                    mctx.beginPath();
+                    mctx.arc(pondcenterX, pondcenterY, r1, 0, 2 * Math.PI);
+                    mctx.fillStyle = "pink";
+                    mctx.fill();
+                } 
+            }
+        });
+
+
+        function update() 
+        {
+            tctx.clearRect(0, 0, topcanvas.width, topcanvas.height);
+            if(simuRun)
+            {
+                drawCat();
+                drawMouse();
+            }
+
+            checkForMouseStatus();  //detect getting caught or successful escape
+            if(simuRun)
+            {
+                updateCatLoc();
+                updateMouseLoc();
+                requestAnimationFrame(update);
+            }
+        }
+
+        update();
+        
+    </script>
+</body>
+</html>
